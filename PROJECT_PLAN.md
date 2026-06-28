@@ -113,10 +113,10 @@ AlphaForge 是一个基于真实股市数据的虚拟交易平台，旨在为投
 
 | 层级 | 技术选型 | 说明 |
 |------|----------|------|
-| **前端** | React 18 + TypeScript | 成熟生态，类型安全 |
+| **前端** | Vue 3 + TypeScript | 岗位常见技术栈，类型安全 |
 | | Vite | 快速构建，HMR |
-| | Zustand | 轻量状态管理 |
-| | Recharts / TradingView | 图表可视化 |
+| | Pinia | Vue 官方推荐状态管理 |
+| | SVG / TradingView | 图表可视化 |
 | | TailwindCSS | 快速UI开发 |
 | **后端** | Node.js + Express / NestJS | JavaScript全栈 |
 | | 或 Python + FastAPI | 数据处理优势 |
@@ -434,7 +434,7 @@ Alpha Vantage 还提供以下高级功能（可在后期扩展）：
 
 | 交付物 | 说明 |
 |--------|------|
-| 前端应用 | React构建的交易界面 |
+| 前端应用 | Vue 3 构建的交易界面 |
 | 后端服务 | RESTful API服务 |
 | 数据库脚本 | 建表及初始化脚本 |
 | 部署文档 | 环境配置与部署指南 |

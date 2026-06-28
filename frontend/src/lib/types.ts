@@ -1,11 +1,9 @@
-// 用户类型
 export interface User {
   id: string;
   email: string;
   created_at: string;
 }
 
-// 账户类型
 export interface Account {
   id: string;
   user_id: string;
@@ -14,7 +12,6 @@ export interface Account {
   created_at: string;
 }
 
-// 持仓类型
 export interface Position {
   id: string;
   account_id: string;
@@ -24,7 +21,6 @@ export interface Position {
   created_at: string;
 }
 
-// 订单类型
 export interface Order {
   id: string;
   account_id: string;
@@ -37,17 +33,15 @@ export interface Order {
   created_at: string;
 }
 
-// 股票报价类型
 export interface Quote {
   symbol: string;
+  name?: string;
   price: number;
   change: number;
   change_percent: number;
-  volume: number;
-  updated_at: string;
+  volume?: number;
 }
 
-// 账户价值历史类型
 export interface AccountValue {
   id: string;
   account_id: string;
@@ -57,22 +51,25 @@ export interface AccountValue {
   recorded_at: string;
 }
 
-// 登录请求
 export interface LoginRequest {
   email: string;
   password: string;
 }
 
-// 注册请求
-export interface RegisterRequest {
-  email: string;
-  password: string;
+export interface RegisterRequest extends LoginRequest {
   initial_balance: 100000 | 1000000 | 10000000;
 }
 
-// 认证响应
 export interface AuthResponse {
   access_token: string;
   token_type: string;
   user: User;
+}
+
+export interface OrderCreate {
+  account_id: string;
+  symbol: string;
+  type: 'buy' | 'sell';
+  shares: number;
+  price: number;
 }

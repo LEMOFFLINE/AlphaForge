@@ -14,13 +14,14 @@ class Settings(BaseSettings):
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
+    STOCK_CACHE_TTL_SECONDS: int = 300
 
     # Alpha Vantage
     ALPHA_VANTAGE_API_KEY: str = "6NM9RLOVI80BJ8WY"
     ALPHA_VANTAGE_BASE_URL: str = "https://www.alphavantage.co/query"
 
     # CORS
-    CORS_ORIGINS: list[str] = ["http://localhost:5173"]
+    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     class Config:
         env_file = ".env"

@@ -13,19 +13,27 @@
 ## 技术栈
 
 ### 前端
-- React 18 + TypeScript + Vite
+- Vue 3 + TypeScript + Vite
 - TailwindCSS v4 (@import 语法)
-- React Router v6
-- Zustand (状态管理)
-- Recharts (图表)
+- Vue Router
+- Pinia (状态管理)
 - Axios (HTTP 客户端)
 
 ### 后端
 - FastAPI (Python 3.10+)
 - SQLAlchemy ORM
 - PostgreSQL (14+)
+- Redis (股票报价缓存)
 - JWT 认证
 - Alpha Vantage API (股票数据)
+
+## 架构亮点
+
+- **前后端分离**：Vue 3/Vite 前端通过 Axios 调用 FastAPI REST API。
+- **Service Layer**：订单交易、账户估值等业务规则从 API 路由中抽离到 `backend/app/services/`，路由层只负责请求/响应和鉴权。
+- **Redis 缓存**：热门股票报价优先写入 Redis，并设置 TTL；本地开发未启动 Redis 时自动降级到进程内缓存。
+- **健康检查**：`/health` 返回 API 状态和 Redis 连接状态，方便部署和排障。
+- **配置外置**：通过 `.env` 管理数据库、Redis、JWT 和第三方 API Key。
 
 ---
 
@@ -36,6 +44,7 @@
 - [Node.js](https://nodejs.org/) (18+)
 - [Python](https://python.org/) (3.10+)
 - [PostgreSQL](https://postgresql.org/) (14+)
+- [Redis](https://redis.io/) (可选；未启动时会自动降级为本地缓存)
 - Git
 
 ### 1. 克隆项目
@@ -130,6 +139,8 @@ ALPHA_VANTAGE_API_KEY = "your-api-key-here"
 创建 `backend/.env` 文件:
 ```
 DATABASE_URL=postgresql://postgres:password@localhost/alphaforge
+REDIS_URL=redis://localhost:6379/0
+STOCK_CACHE_TTL_SECONDS=300
 ALPHA_VANTAGE_API_KEY=your-key
 SECRET_KEY=your-jwt-secret-key
 ALGORITHM=HS256
@@ -166,12 +177,12 @@ psql -U postgres -d alphaforge -f ../database/schema.sql
 
 ```
 Investment Simulator/
-├── frontend/              # React 前端
+├── frontend/              # Vue 3 前端
 │   ├── src/
 │   │   ├── components/    # AssetChart 等组件
 │   │   ├── lib/          # API 客户端、类型定义
 │   │   ├── pages/        # 页面 (Login, Dashboard, Market, Analysis)
-│   │   ├── store/        # Zustand store
+│   │   ├── stores/       # Pinia stores
 │   │   └── styles/       # TailwindCSS
 │   └── package.json
 │
@@ -297,7 +308,7 @@ npm run build
 
 ### 添加新页面
 1. 在 `frontend/src/pages/` 创建页面组件
-2. 在 `frontend/src/App.tsx` 添加路由
+2. 在 `frontend/src/router/index.ts` 添加路由
 3. 更新所有页面的导航链接
 
 ### 添加新 API

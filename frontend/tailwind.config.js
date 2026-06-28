@@ -4,7 +4,7 @@ import { throttle } from 'tailwindcss/lib/util/mergeOptionsWithDefault.js';
 export default {
   content: [
     "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
+    "./src/**/*.{js,ts,vue}",
   ],
   theme: {
     extend: {

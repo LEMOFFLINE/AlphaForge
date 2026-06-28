@@ -7,11 +7,11 @@ AlphaForge 是一个基于真实股市数据的虚拟投资模拟平台。用户
 ## 技术栈
 
 ### 前端
-- React 18 + TypeScript + Vite
-- React Router v6 (路由)
+- Vue 3 + TypeScript + Vite
+- Vue Router (路由)
 - TailwindCSS v4 (样式，主色 #1a3d63)
-- Zustand (状态管理)
-- Recharts (图表)
+- Pinia (状态管理)
+- SVG 图表组件
 - Axios (HTTP 客户端)
 
 ### 后端
@@ -32,12 +32,12 @@ AlphaForge 是一个基于真实股市数据的虚拟投资模拟平台。用户
 
 ```
 Investment Simulator/
-├── frontend/                 # React 前端
+├── frontend/                 # Vue 3 前端
 │   ├── src/
-│   │   ├── components/      # 可复用组件 (AssetChart.tsx)
+│   │   ├── components/      # 可复用 Vue 组件
 │   │   ├── lib/             # API 客户端、类型定义
 │   │   ├── pages/           # 页面组件
-│   │   ├── store/           # Zustand 状态管理
+│   │   ├── stores/          # Pinia 状态管理
 │   │   └── styles/          # 全局样式
 │   └── package.json
 │
@@ -129,7 +129,7 @@ Investment Simulator/
 
 ### 资产曲线
 - 交易后自动记录 `account_values`
-- 图表使用 Recharts 折线图
+- 图表使用 Vue 组件实现轻量 SVG 折线图
 - 显示最近30天数据
 
 ## 待实现功能
