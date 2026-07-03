@@ -42,6 +42,8 @@ class StockTrendService:
         points_by_timestamp = {}
         for row in rows:
             bucket = self._hour_bucket(row.recorded_at)
+            if row.recorded_at != bucket:
+                continue
             points_by_timestamp[self._utc_timestamp(bucket)] = row.price
 
         points = [

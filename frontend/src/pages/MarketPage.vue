@@ -7,6 +7,9 @@ import { useAuthStore } from '../stores/auth';
 
 const PAGE_SIZE = 20;
 const DISPLAY_TIME_ZONE = 'Asia/Shanghai';
+const CHART_WIDTH = 860;
+const CHART_HEIGHT = 220;
+const CHART_PADDING = 14;
 
 const auth = useAuthStore();
 const stocks = ref<Quote[]>([]);
@@ -112,17 +115,19 @@ function chartPath(points: StockTrendPoint[]) {
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = Math.max(max - min, 0.01);
-  const width = 860;
-  const height = 220;
-  const singlePointY = height / 2;
+  const minTimestamp = Math.min(...points.map((point) => point.timestamp));
+  const maxTimestamp = Math.max(...points.map((point) => point.timestamp));
+  const timeRange = Math.max(maxTimestamp - minTimestamp, 1);
+  const drawableHeight = CHART_HEIGHT - CHART_PADDING * 2;
+  const singlePointY = CHART_HEIGHT / 2;
   if (points.length === 1) {
-    return `0,${singlePointY} ${width},${singlePointY}`;
+    return `0,${singlePointY} ${CHART_WIDTH},${singlePointY}`;
   }
 
   return points
-    .map((point, index) => {
-      const x = points.length === 1 ? width / 2 : (index / (points.length - 1)) * width;
-      const y = height - ((point.price - min) / range) * (height - 28) - 14;
+    .map((point) => {
+      const x = ((point.timestamp - minTimestamp) / timeRange) * CHART_WIDTH;
+      const y = CHART_HEIGHT - ((point.price - min) / range) * drawableHeight - CHART_PADDING;
       return `${x},${y}`;
     })
     .join(' ');
@@ -151,25 +156,21 @@ function chartSummary(points: StockTrendPoint[]) {
 function trendLabels(points: StockTrendPoint[]) {
   if (points.length === 0) return [];
   const timeZone = expandedTrend.value?.timezone || DISPLAY_TIME_ZONE;
-  const localDates = points.map((point) => new Date(point.timestamp * 1000).toLocaleDateString('zh-CN', {
+  const minTimestamp = Math.min(...points.map((point) => point.timestamp));
+  const maxTimestamp = Math.max(...points.map((point) => point.timestamp));
+  const timeRange = Math.max(maxTimestamp - minTimestamp, 1);
+  const ticks = Array.from({ length: 5 }, (_, index) => minTimestamp + (timeRange * index) / 4);
+  const localDates = ticks.map((timestamp) => new Date(timestamp * 1000).toLocaleDateString('zh-CN', {
     month: 'numeric',
     day: 'numeric',
     timeZone,
   }));
-  const crossesDate = new Set(localDates).size > 1;
-  const sample = points.filter((_, index) => {
-    const stride = Math.max(1, Math.floor(points.length / 4));
-    return index % stride === 0;
-  }).slice(0, 5);
+  const includeDate = trendRange.value === '7d' || new Set(localDates).size > 1;
 
-  return sample.map((point) => {
-    const date = new Date(point.timestamp * 1000);
-    if (trendRange.value !== '1d') {
-      return date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', timeZone });
-    }
-
+  return ticks.map((timestamp) => {
+    const date = new Date(timestamp * 1000);
     const time = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', timeZone });
-    if (!crossesDate) {
+    if (!includeDate) {
       return time;
     }
 
@@ -351,7 +352,7 @@ onMounted(async () => {
                         />
                       </svg>
                       <div class="grid grid-cols-5 text-xs text-text-muted">
-                        <span v-for="label in trendLabels(expandedTrend.points)" :key="label">{{ label }}</span>
+                        <span v-for="(label, index) in trendLabels(expandedTrend.points)" :key="`${label}-${index}`">{{ label }}</span>
                       </div>
                     </div>
                   </td>
