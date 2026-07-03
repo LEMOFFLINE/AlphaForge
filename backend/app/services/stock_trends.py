@@ -3,6 +3,7 @@ from typing import Literal
 
 from app.core.database import SessionLocal
 from app.models.user import StockPriceHistory
+from app.services.finnhub import finnhub
 from app.services.stock_cache import stock_cache
 from app.services.yahoo_chart import yahoo_chart
 
@@ -16,9 +17,9 @@ class StockTrendService:
         if market_trend:
             return market_trend
 
-        return self._get_local_trend(normalized_symbol, trend_range)
+        return await self._get_local_trend(normalized_symbol, trend_range)
 
-    def _get_local_trend(self, normalized_symbol: str, trend_range: TrendRange) -> dict | None:
+    async def _get_local_trend(self, normalized_symbol: str, trend_range: TrendRange) -> dict | None:
         lookback = timedelta(days=1 if trend_range == "1d" else 7)
         start = datetime.utcnow() - lookback
 
@@ -44,7 +45,7 @@ class StockTrendService:
             {"timestamp": timestamp, "price": price}
             for timestamp, price in sorted(points_by_timestamp.items())
         ]
-        points = self._with_quote_baseline(normalized_symbol, trend_range, points)
+        points = await self._with_quote_baseline(normalized_symbol, trend_range, points)
 
         if not points:
             return None
@@ -63,12 +64,12 @@ class StockTrendService:
         return int(value.astimezone(timezone.utc).timestamp())
 
     @staticmethod
-    def _with_quote_baseline(
+    async def _with_quote_baseline(
         symbol: str,
         trend_range: TrendRange,
         points: list[dict],
     ) -> list[dict]:
-        quote = stock_cache.get_quote(symbol)
+        quote = stock_cache.get_quote(symbol) or await finnhub.get_quote(symbol)
         if not quote:
             return points
 
