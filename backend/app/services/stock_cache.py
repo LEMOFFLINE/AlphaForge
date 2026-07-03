@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Dict, Optional
 
 from app.core.cache import cache_client
@@ -18,6 +18,8 @@ class StockCache:
         self._is_refreshing = False
         self._refresh_interval = settings.STOCK_CACHE_REFRESH_INTERVAL_SECONDS
         self._cache_ttl = max(settings.STOCK_CACHE_TTL_SECONDS, self._refresh_interval * 2)
+        self._batch_size = max(1, settings.STOCK_REFRESH_BATCH_SIZE)
+        self._batch_pause = max(0.0, settings.STOCK_REFRESH_BATCH_PAUSE_SECONDS)
         self._quote_key_prefix = "stocks:quote:"
         self._popular_quotes_key = "stocks:popular_quotes"
         self._last_update_key = "stocks:last_update"
@@ -37,36 +39,42 @@ class StockCache:
 
         self._is_refreshing = True
         refresh_time = datetime.utcnow()
+        history_time = self._hour_bucket(refresh_time)
         print(f"Updating stock cache at {refresh_time}")
         history_rows = []
 
         try:
-            for stock in POPULAR_STOCKS:
-                symbol = stock["symbol"].upper()
-                try:
-                    quote = await finnhub.get_quote(symbol)
-                    if quote:
-                        cached_quote = {
-                            **quote,
-                            "symbol": quote.get("symbol", symbol).upper(),
-                            "name": stock["name"],
-                        }
-                        self._cache[symbol] = cached_quote
-                        cache_client.set_json(
-                            self._quote_key(symbol),
-                            cached_quote,
-                            ttl_seconds=self._cache_ttl,
-                        )
-                        history_rows.append(
-                            StockPriceHistory(
-                                id=str(uuid.uuid4()),
-                                symbol=symbol,
-                                price=float(cached_quote["price"]),
-                                recorded_at=self._quote_recorded_at(cached_quote, refresh_time),
+            for batch_start in range(0, len(POPULAR_STOCKS), self._batch_size):
+                batch = POPULAR_STOCKS[batch_start:batch_start + self._batch_size]
+                for stock in batch:
+                    symbol = stock["symbol"].upper()
+                    try:
+                        quote = await finnhub.get_quote(symbol)
+                        if quote:
+                            cached_quote = {
+                                **quote,
+                                "symbol": quote.get("symbol", symbol).upper(),
+                                "name": stock["name"],
+                            }
+                            self._cache[symbol] = cached_quote
+                            cache_client.set_json(
+                                self._quote_key(symbol),
+                                cached_quote,
+                                ttl_seconds=self._cache_ttl,
                             )
-                        )
-                except Exception as e:
-                    print(f"Error caching {symbol}: {e}")
+                            history_rows.append(
+                                StockPriceHistory(
+                                    id=str(uuid.uuid4()),
+                                    symbol=symbol,
+                                    price=float(cached_quote["price"]),
+                                    recorded_at=history_time,
+                                )
+                            )
+                    except Exception as e:
+                        print(f"Error caching {symbol}: {e}")
+
+                if batch_start + self._batch_size < len(POPULAR_STOCKS) and self._batch_pause > 0:
+                    await asyncio.sleep(self._batch_pause)
 
             self._record_price_history(history_rows, refresh_time)
             popular_quotes = self._current_popular_quotes()
@@ -133,6 +141,12 @@ class StockCache:
         try:
             cutoff = refresh_time.replace(microsecond=0) - settings.STOCK_TREND_RETENTION_DAYS_DELTA
             db.query(StockPriceHistory).filter(StockPriceHistory.recorded_at < cutoff).delete()
+            symbols = [row.symbol for row in rows]
+            recorded_at = rows[0].recorded_at
+            db.query(StockPriceHistory).filter(
+                StockPriceHistory.symbol.in_(symbols),
+                StockPriceHistory.recorded_at == recorded_at,
+            ).delete(synchronize_session=False)
             db.add_all(rows)
             db.commit()
         except Exception as e:
@@ -162,11 +176,8 @@ class StockCache:
         }
 
     @staticmethod
-    def _quote_recorded_at(data: dict, fallback: datetime) -> datetime:
-        timestamp = int(data.get("timestamp") or 0)
-        if timestamp <= 0:
-            return fallback
-        return datetime.fromtimestamp(timestamp, tz=timezone.utc).replace(tzinfo=None)
+    def _hour_bucket(value: datetime) -> datetime:
+        return value.replace(minute=0, second=0, microsecond=0)
 
 
 stock_cache = StockCache()

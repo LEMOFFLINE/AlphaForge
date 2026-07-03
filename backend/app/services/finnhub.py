@@ -13,6 +13,8 @@ class FinnhubService:
         self.api_key = settings.FINNHUB_API_KEY
         self._last_request_time = 0.0
         self._min_interval = settings.FINNHUB_MIN_INTERVAL_SECONDS
+        self._max_retries = max(0, settings.FINNHUB_MAX_RETRIES)
+        self._retry_delay = max(0.0, settings.FINNHUB_RETRY_DELAY_SECONDS)
 
     async def _rate_limit(self):
         now = asyncio.get_running_loop().time()
@@ -26,23 +28,28 @@ class FinnhubService:
             print("Finnhub API key is missing")
             return None
 
-        await self._rate_limit()
         request_params = {**params, "token": self.api_key}
 
-        try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
-                response = await client.get(f"{self.base_url}{path}", params=request_params)
-                response.raise_for_status()
-                data = response.json()
+        for attempt in range(self._max_retries + 1):
+            await self._rate_limit()
+            try:
+                async with httpx.AsyncClient(timeout=20.0) as client:
+                    response = await client.get(f"{self.base_url}{path}", params=request_params)
+                    response.raise_for_status()
+                    data = response.json()
 
-                if isinstance(data, dict) and data.get("error"):
-                    print(f"Finnhub API error: {data['error']}")
+                    if isinstance(data, dict) and data.get("error"):
+                        print(f"Finnhub API error: {data['error']}")
+                        return None
+
+                    return data
+            except (httpx.HTTPError, ValueError) as e:
+                if attempt >= self._max_retries:
+                    print(f"Error calling Finnhub {path}: {e}")
                     return None
+                await asyncio.sleep(self._retry_delay)
 
-                return data
-        except (httpx.HTTPError, ValueError) as e:
-            print(f"Error calling Finnhub {path}: {e}")
-            return None
+        return None
 
     async def get_quote(self, symbol: str) -> Optional[dict]:
         normalized_symbol = symbol.upper()

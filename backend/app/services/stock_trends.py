@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.core.database import SessionLocal
 from app.models.user import StockPriceHistory
 from app.services.finnhub import finnhub
 from app.services.stock_cache import stock_cache
-from app.services.yahoo_chart import yahoo_chart
 
 TrendRange = Literal["1d", "7d"]
 
@@ -13,15 +14,12 @@ TrendRange = Literal["1d", "7d"]
 class StockTrendService:
     async def get_trend(self, symbol: str, trend_range: TrendRange) -> dict | None:
         normalized_symbol = symbol.upper()
-        market_trend = await yahoo_chart.get_trend(normalized_symbol, trend_range)
-        if market_trend:
-            return market_trend
-
         return await self._get_local_trend(normalized_symbol, trend_range)
 
     async def _get_local_trend(self, normalized_symbol: str, trend_range: TrendRange) -> dict | None:
-        lookback = timedelta(days=1 if trend_range == "1d" else 7)
-        start = datetime.utcnow() - lookback
+        hours = 24 if trend_range == "1d" else 7 * 24
+        end = self._hour_bucket(datetime.utcnow())
+        start = end - timedelta(hours=hours)
 
         db = SessionLocal()
         try:
@@ -30,22 +28,27 @@ class StockTrendService:
                 .filter(
                     StockPriceHistory.symbol == normalized_symbol,
                     StockPriceHistory.recorded_at >= start,
+                    StockPriceHistory.recorded_at <= end,
                 )
                 .order_by(StockPriceHistory.recorded_at.asc())
                 .all()
             )
+        except SQLAlchemyError as e:
+            print(f"Error loading stock price history for {normalized_symbol}: {e}")
+            rows = []
         finally:
             db.close()
 
-        points_by_timestamp = {
-            self._utc_timestamp(row.recorded_at): row.price
-            for row in rows
-        }
+        points_by_timestamp = {}
+        for row in rows:
+            bucket = self._hour_bucket(row.recorded_at)
+            points_by_timestamp[self._utc_timestamp(bucket)] = row.price
+
         points = [
             {"timestamp": timestamp, "price": price}
             for timestamp, price in sorted(points_by_timestamp.items())
         ]
-        points = await self._with_quote_baseline(normalized_symbol, trend_range, points)
+        points = await self._with_quote_baseline(normalized_symbol, trend_range, points, start, end)
 
         if not points:
             return None
@@ -64,10 +67,16 @@ class StockTrendService:
         return int(value.astimezone(timezone.utc).timestamp())
 
     @staticmethod
+    def _hour_bucket(value: datetime) -> datetime:
+        return value.replace(minute=0, second=0, microsecond=0)
+
+    @staticmethod
     async def _with_quote_baseline(
         symbol: str,
         trend_range: TrendRange,
         points: list[dict],
+        start: datetime,
+        end: datetime,
     ) -> list[dict]:
         quote = stock_cache.get_quote(symbol) or await finnhub.get_quote(symbol)
         if not quote:
@@ -78,37 +87,29 @@ class StockTrendService:
         if price <= 0:
             return points
 
-        quote_timestamp = int(quote.get("timestamp") or 0)
-        if quote_timestamp > 0:
-            points_by_timestamp = {
-                point["timestamp"]: point["price"]
-                for point in points
-                if point["timestamp"] <= quote_timestamp
-            }
-            points_by_timestamp[quote_timestamp] = price
-            points = [
+        points_by_timestamp = {point["timestamp"]: point["price"] for point in points}
+        end_timestamp = StockTrendService._utc_timestamp(end)
+        points_by_timestamp[end_timestamp] = price
+
+        if trend_range != "1d" or abs(change) < 0.005:
+            return [
                 {"timestamp": timestamp, "price": point_price}
                 for timestamp, point_price in sorted(points_by_timestamp.items())
             ]
 
-        if trend_range != "1d" or abs(change) < 0.005:
-            return points
-
         previous_close = price - change
         if previous_close <= 0:
-            return points
+            return [
+                {"timestamp": timestamp, "price": point_price}
+                for timestamp, point_price in sorted(points_by_timestamp.items())
+            ]
 
-        latest_timestamp = quote_timestamp if quote_timestamp > 0 else (
-            points[-1]["timestamp"] if points else int(datetime.now(timezone.utc).timestamp())
-        )
-        has_movement = any(abs(point["price"] - previous_close) >= 0.005 for point in points)
-        baseline_timestamp = latest_timestamp - 24 * 60 * 60
-        baseline = {"timestamp": baseline_timestamp, "price": previous_close}
-        if not points:
-            return [baseline, {"timestamp": latest_timestamp, "price": price}]
-        if has_movement and points[0]["timestamp"] <= baseline_timestamp:
-            return points
-        return [baseline, *points]
+        start_timestamp = StockTrendService._utc_timestamp(start)
+        points_by_timestamp.setdefault(start_timestamp, previous_close)
+        return [
+            {"timestamp": timestamp, "price": point_price}
+            for timestamp, point_price in sorted(points_by_timestamp.items())
+        ]
 
 
 stock_trends = StockTrendService()
