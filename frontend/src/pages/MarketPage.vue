@@ -327,6 +327,9 @@ onMounted(async () => {
                     <div v-else-if="trendError" class="flex h-56 items-center justify-center rounded bg-gray-50 text-sm text-loss">
                       {{ trendError }}
                     </div>
+                    <div v-else-if="expandedTrend && expandedTrend.points.length < 2" class="flex h-56 items-center justify-center rounded bg-gray-50 text-sm text-text-muted">
+                      历史数据积累中，至少需要 2 个整点快照
+                    </div>
                     <div v-else-if="expandedTrend" class="rounded bg-gray-50 p-4">
                       <div class="mb-2 flex items-center justify-between text-xs text-text-muted">
                         <span>${{ chartSummary(expandedTrend.points).min.toFixed(2) }}</span>
