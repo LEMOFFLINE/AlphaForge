@@ -1,7 +1,11 @@
-from pydantic import BaseModel, EmailStr, field_serializer
+import re
+
+from pydantic import BaseModel, EmailStr, Field, field_serializer, field_validator
 from datetime import datetime
-from typing import Optional, Literal
+from typing import Literal
 from app.models.user import OrderType, OrderStatus
+
+SYMBOL_PATTERN = re.compile(r"^[A-Za-z0-9.^-]{1,16}$")
 
 
 # User schemas
@@ -10,8 +14,8 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: str
-    initial_balance: int = 100000  # 100K, 1M, or 10M
+    password: str = Field(min_length=8, max_length=128)
+    initial_balance: Literal[100000, 1000000, 10000000] = 100000
 
 
 class UserResponse(BaseModel):
@@ -23,17 +27,14 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
-# Token schema
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+class AuthResponse(BaseModel):
     user: UserResponse
 
 
 # Login schema
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=1, max_length=128)
 
 
 # Account schemas
@@ -67,10 +68,18 @@ class PositionResponse(BaseModel):
 # Order schemas
 class OrderBase(BaseModel):
     account_id: str
-    symbol: str
+    symbol: str = Field(min_length=1, max_length=16)
     type: OrderType
-    shares: int
-    price: float
+    shares: int = Field(gt=0, le=1_000_000)
+    price: float = Field(gt=0, le=1_000_000, allow_inf_nan=False)
+
+    @field_validator("symbol")
+    @classmethod
+    def validate_symbol(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if not SYMBOL_PATTERN.fullmatch(normalized):
+            raise ValueError("Invalid stock symbol")
+        return normalized
 
 
 class OrderCreate(OrderBase):
@@ -102,6 +111,17 @@ class QuoteResponse(BaseModel):
     change: float
     change_percent: float
     volume: int
+
+
+class StockTrendPoint(BaseModel):
+    timestamp: int
+    price: float
+
+
+class StockTrendResponse(BaseModel):
+    symbol: str
+    range: Literal["1d", "7d"]
+    points: list[StockTrendPoint]
 
 
 # Account Value schemas

@@ -1,20 +1,56 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import uuid
+
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
+
+from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import verify_password, get_password_hash, create_access_token, decode_access_token
-from app.models.user import User
-from app.models.schemas import UserCreate, UserResponse, Token, LoginRequest
+from app.core.security import create_access_token, decode_access_token, get_password_hash, verify_password
+from app.models.schemas import AuthResponse, LoginRequest, UserCreate, UserResponse
+from app.models.user import Account, User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
+
+
+def set_access_token_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=settings.ACCESS_TOKEN_COOKIE_NAME,
+        value=token,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
+        path="/",
+    )
+
+
+def clear_access_token_cookie(response: Response) -> None:
+    response.set_cookie(
+        key=settings.ACCESS_TOKEN_COOKIE_NAME,
+        value="",
+        max_age=0,
+        expires=0,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
+        path="/",
+    )
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    access_token: str | None = Cookie(default=None, alias=settings.ACCESS_TOKEN_COOKIE_NAME),
     db: Session = Depends(get_db),
 ) -> User:
-    token = credentials.credentials
+    token = credentials.credentials if credentials else access_token
+    if token is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
     payload = decode_access_token(token)
     if payload is None:
         raise HTTPException(
@@ -33,9 +69,8 @@ def get_current_user(
     return user
 
 
-@router.post("/register", response_model=Token)
-async def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    # 检查邮箱是否已存在
+@router.post("/register", response_model=AuthResponse)
+async def register(user_data: UserCreate, response: Response, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(
@@ -43,23 +78,16 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
             detail="Email already registered",
         )
 
-    # 创建用户
-    import uuid
     user_id = str(uuid.uuid4())
-    hashed_password = get_password_hash(user_data.password)
-
     new_user = User(
         id=user_id,
         email=user_data.email,
-        hashed_password=hashed_password,
+        hashed_password=get_password_hash(user_data.password),
     )
     db.add(new_user)
 
-    # 创建账户
-    from app.models.user import Account
-    account_id = str(uuid.uuid4())
     new_account = Account(
-        id=account_id,
+        id=str(uuid.uuid4()),
         user_id=user_id,
         initial_balance=float(user_data.initial_balance),
         current_balance=float(user_data.initial_balance),
@@ -69,17 +97,14 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
 
-    # 生成 token
     access_token = create_access_token(data={"sub": user_id})
+    set_access_token_cookie(response, access_token)
 
-    return Token(
-        access_token=access_token,
-        user=UserResponse.model_validate(new_user),
-    )
+    return AuthResponse(user=UserResponse.model_validate(new_user))
 
 
-@router.post("/login", response_model=Token)
-async def login(credentials: LoginRequest, db: Session = Depends(get_db)):
+@router.post("/login", response_model=AuthResponse)
+async def login(credentials: LoginRequest, response: Response, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == credentials.email).first()
 
     if not user or not verify_password(credentials.password, user.hashed_password):
@@ -89,11 +114,9 @@ async def login(credentials: LoginRequest, db: Session = Depends(get_db)):
         )
 
     access_token = create_access_token(data={"sub": user.id})
+    set_access_token_cookie(response, access_token)
 
-    return Token(
-        access_token=access_token,
-        user=UserResponse.model_validate(user),
-    )
+    return AuthResponse(user=UserResponse.model_validate(user))
 
 
 @router.get("/me", response_model=UserResponse)
@@ -102,6 +125,6 @@ async def get_me(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/logout")
-async def logout():
-    # 在实际应用中，可能需要将 token 加入黑名单
+async def logout(response: Response):
+    clear_access_token_cookie(response)
     return {"message": "Successfully logged out"}

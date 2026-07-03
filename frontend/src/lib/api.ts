@@ -9,23 +9,17 @@ import type {
   Position,
   Quote,
   RegisterRequest,
+  StockTrend,
 } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
-});
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
 });
 
 export const authApi = {
@@ -40,6 +34,9 @@ export const authApi = {
   async me() {
     const response = await api.get('/api/auth/me');
     return response.data;
+  },
+  async logout(): Promise<void> {
+    await api.post('/api/auth/logout');
   },
 };
 
@@ -87,6 +84,10 @@ export const stockApi = {
   },
   async getDailyData(symbol: string) {
     const response = await api.get(`/api/stocks/daily/${symbol}`);
+    return response.data;
+  },
+  async getTrend(symbol: string, range: '1d' | '7d'): Promise<StockTrend> {
+    const response = await api.get(`/api/stocks/trend/${symbol}?range=${range}`);
     return response.data;
   },
 };

@@ -42,6 +42,17 @@ export interface Quote {
   volume?: number;
 }
 
+export interface StockTrendPoint {
+  timestamp: number;
+  price: number;
+}
+
+export interface StockTrend {
+  symbol: string;
+  range: '1d' | '7d';
+  points: StockTrendPoint[];
+}
+
 export interface AccountValue {
   id: string;
   account_id: string;
@@ -61,8 +72,6 @@ export interface RegisterRequest extends LoginRequest {
 }
 
 export interface AuthResponse {
-  access_token: string;
-  token_type: string;
   user: User;
 }
 

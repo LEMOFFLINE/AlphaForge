@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -55,7 +55,7 @@ async def record_account_value(
 @router.get("/{account_id}", response_model=List[AccountValueResponse])
 async def get_account_value_history(
     account_id: str,
-    days: int = 30,
+    days: int = Query(default=30, ge=1, le=365),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

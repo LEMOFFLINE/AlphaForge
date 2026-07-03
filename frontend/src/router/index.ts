@@ -3,6 +3,7 @@ import LoginPage from '../pages/LoginPage.vue';
 import DashboardPage from '../pages/DashboardPage.vue';
 import MarketPage from '../pages/MarketPage.vue';
 import AnalysisPage from '../pages/AnalysisPage.vue';
+import { useAuthStore } from '../stores/auth';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -15,9 +16,21 @@ const router = createRouter({
   ],
 });
 
-router.beforeEach((to) => {
-  if (to.meta.requiresAuth && !localStorage.getItem('token')) {
-    return '/login';
+router.beforeEach(async (to) => {
+  const auth = useAuthStore();
+
+  if (to.meta.requiresAuth) {
+    const isAuthenticated = auth.isAuthenticated || await auth.loadCurrentUser();
+    if (!isAuthenticated) {
+      return { path: '/login', query: { redirect: to.fullPath } };
+    }
+  }
+
+  if (to.path === '/login') {
+    const isAuthenticated = auth.isAuthenticated || await auth.loadCurrentUser();
+    if (isAuthenticated) {
+      return '/dashboard';
+    }
   }
 });
 

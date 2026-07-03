@@ -84,5 +84,14 @@ class AccountValue(Base):
     account = relationship("Account", back_populates="value_history")
 
 
+class StockPriceHistory(Base):
+    __tablename__ = "stock_price_history"
+
+    id = Column(String, primary_key=True, index=True)
+    symbol = Column(String, index=True, nullable=False)
+    price = Column(Float, nullable=False)
+    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 # Add relationship to Account
 Account.value_history = relationship("AccountValue", back_populates="account", order_by=lambda: AccountValue.recorded_at.desc())

@@ -1,15 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from app.services.alpha_vantage import alpha_vantage
+from fastapi import APIRouter, HTTPException, Path, Query
+
+from app.models.schemas import QuoteResponse, StockTrendResponse
+from app.services.finnhub import finnhub
 from app.services.popular_stocks import POPULAR_STOCKS
 from app.services.stock_cache import stock_cache
-from app.models.schemas import QuoteResponse
+from app.services.stock_trends import stock_trends
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
 
 
 @router.get("/quote/{symbol}", response_model=QuoteResponse)
-async def get_quote(symbol: str):
-    # 先从缓存获取
+async def get_quote(symbol: str = Path(min_length=1, max_length=16, pattern=r"^[A-Za-z0-9.^-]+$")):
     cached = stock_cache.get_quote(symbol)
     if cached:
         return QuoteResponse(
@@ -20,8 +21,7 @@ async def get_quote(symbol: str):
             volume=cached.get("volume", 0),
         )
 
-    # 缓存没有则从API获取
-    quote = await alpha_vantage.get_quote(symbol)
+    quote = await finnhub.get_quote(symbol)
 
     if not quote:
         raise HTTPException(status_code=404, detail="Quote not found")
@@ -36,28 +36,33 @@ async def get_quote(symbol: str):
 
 
 @router.get("/search")
-async def search_symbols(q: str):
-    results = await alpha_vantage.search_symbol(q)
+async def search_symbols(q: str = Query(min_length=1, max_length=64)):
+    results = await finnhub.search_symbol(q)
     return results
 
 
 @router.get("/daily/{symbol}")
-async def get_daily_data(symbol: str):
-    data = await alpha_vantage.get_daily_data(symbol)
+async def get_daily_data(symbol: str = Path(min_length=1, max_length=16, pattern=r"^[A-Za-z0-9.^-]+$")):
+    data = await finnhub.get_daily_data(symbol)
     return data
+
+
+@router.get("/trend/{symbol}", response_model=StockTrendResponse)
+async def get_stock_trend(
+    symbol: str = Path(min_length=1, max_length=16, pattern=r"^[A-Za-z0-9.^-]+$"),
+    range: str = Query(default="1d", pattern=r"^(1d|7d)$"),
+):
+    trend = stock_trends.get_trend(symbol, range)  # type: ignore[arg-type]
+    if not trend:
+        raise HTTPException(status_code=404, detail="Trend not found")
+    return trend
 
 
 @router.get("/popular")
 async def get_popular_stocks():
-    """获取热门美股列表"""
     return POPULAR_STOCKS
 
 
 @router.get("/popular/quotes")
-async def get_popular_quotes(background_tasks: BackgroundTasks):
-    """获取热门股票实时报价（使用缓存）"""
-    # 如果缓存过期，在后台更新
-    if stock_cache.is_expired():
-        background_tasks.add_task(stock_cache.update_cache)
-
+async def get_popular_quotes():
     return stock_cache.get_cached_quotes()

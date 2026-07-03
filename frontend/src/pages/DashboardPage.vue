@@ -47,19 +47,36 @@ async function loadDashboard() {
     return;
   }
 
-  const [posData, historyData, popularData] = await Promise.all([
+  const [positionsResult, historyResult, popularResult] = await Promise.allSettled([
     positionApi.getPositions(auth.currentAccount.id),
     accountValueApi.getHistory(auth.currentAccount.id, 30),
     stockApi.getPopularQuotes(),
   ]);
 
-  positions.value = posData;
-  valueHistory.value = historyData;
-  popularStocks.value = popularData;
+  if (positionsResult.status === 'fulfilled') {
+    positions.value = positionsResult.value;
+  } else {
+    console.error('Failed to load positions:', positionsResult.reason);
+    positions.value = [];
+  }
+
+  if (historyResult.status === 'fulfilled') {
+    valueHistory.value = historyResult.value;
+  } else {
+    console.error('Failed to load account value history:', historyResult.reason);
+    valueHistory.value = [];
+  }
+
+  if (popularResult.status === 'fulfilled') {
+    popularStocks.value = popularResult.value;
+  } else {
+    console.error('Failed to load popular quotes:', popularResult.reason);
+    popularStocks.value = [];
+  }
 
   const quotes: Record<string, Quote> = {};
   await Promise.all(
-    posData.map(async (position) => {
+    positions.value.map(async (position) => {
       try {
         quotes[position.symbol] = await stockApi.getQuote(position.symbol);
       } catch {
@@ -77,11 +94,6 @@ async function loadDashboard() {
 }
 
 onMounted(async () => {
-  if (!auth.token) {
-    router.push('/login');
-    return;
-  }
-
   try {
     await loadAccounts();
     await loadDashboard();
@@ -120,7 +132,7 @@ onMounted(async () => {
               </button>
             </div>
             <div v-if="popularStocks.length === 0" class="py-6 text-sm text-text-muted">
-              正在等待真实市场数据...
+              市场缓存暂时为空，请稍后刷新或进入全球市场查看。
             </div>
             <div v-else class="grid grid-cols-2 gap-4 md:grid-cols-5">
               <div v-for="stock in popularStocks.slice(0, 5)" :key="stock.symbol" class="text-center">

@@ -1,9 +1,10 @@
 import { defineStore } from 'pinia';
+import { authApi } from '../lib/api';
 import type { Account, User } from '../lib/types';
 
 interface AuthState {
   user: User | null;
-  token: string | null;
+  initialized: boolean;
   accounts: Account[];
   currentAccount: Account | null;
 }
@@ -11,18 +12,17 @@ interface AuthState {
 export const useAuthStore = defineStore('auth', {
   state: (): AuthState => ({
     user: null,
-    token: localStorage.getItem('token'),
+    initialized: false,
     accounts: [],
     currentAccount: null,
   }),
   getters: {
-    isAuthenticated: (state) => Boolean(state.token),
+    isAuthenticated: (state) => Boolean(state.user),
   },
   actions: {
-    setAuth(user: User, token: string) {
-      localStorage.setItem('token', token);
+    setAuth(user: User) {
       this.user = user;
-      this.token = token;
+      this.initialized = true;
     },
     setAccounts(accounts: Account[]) {
       this.accounts = accounts;
@@ -33,12 +33,32 @@ export const useAuthStore = defineStore('auth', {
     setCurrentAccount(account: Account | null) {
       this.currentAccount = account;
     },
-    logout() {
-      localStorage.removeItem('token');
+    clearAuth() {
       this.user = null;
-      this.token = null;
       this.accounts = [];
       this.currentAccount = null;
+      this.initialized = true;
+    },
+    async loadCurrentUser() {
+      if (this.initialized) {
+        return this.isAuthenticated;
+      }
+
+      try {
+        this.user = await authApi.me();
+        this.initialized = true;
+        return true;
+      } catch {
+        this.clearAuth();
+        return false;
+      }
+    },
+    async logout() {
+      try {
+        await authApi.logout();
+      } finally {
+        this.clearAuth();
+      }
     },
   },
 });

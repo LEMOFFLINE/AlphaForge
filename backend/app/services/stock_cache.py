@@ -1,9 +1,13 @@
+import asyncio
+import uuid
 from datetime import datetime
 from typing import Dict, Optional
 
 from app.core.cache import cache_client
 from app.core.config import settings
-from app.services.alpha_vantage import alpha_vantage
+from app.core.database import SessionLocal
+from app.models.user import StockPriceHistory
+from app.services.finnhub import finnhub
 from app.services.popular_stocks import POPULAR_STOCKS
 
 
@@ -12,10 +16,19 @@ class StockCache:
         self._cache: Dict[str, dict] = {}
         self._last_update: Optional[datetime] = None
         self._is_refreshing = False
-        self._cache_ttl = settings.STOCK_CACHE_TTL_SECONDS
+        self._refresh_interval = settings.STOCK_CACHE_REFRESH_INTERVAL_SECONDS
+        self._cache_ttl = max(settings.STOCK_CACHE_TTL_SECONDS, self._refresh_interval * 2)
         self._quote_key_prefix = "stocks:quote:"
         self._popular_quotes_key = "stocks:popular_quotes"
         self._last_update_key = "stocks:last_update"
+
+    async def run_periodic_refresh(self):
+        """Continuously refresh popular quotes on a fixed start-to-start interval."""
+        while True:
+            started_at = asyncio.get_running_loop().time()
+            await self.update_cache()
+            elapsed = asyncio.get_running_loop().time() - started_at
+            await asyncio.sleep(max(0, self._refresh_interval - elapsed))
 
     async def update_cache(self):
         """Refresh popular stock quotes in Redis, with memory fallback."""
@@ -23,14 +36,15 @@ class StockCache:
             return
 
         self._is_refreshing = True
-        print(f"Updating stock cache at {datetime.now()}")
-        popular_quotes = []
+        refresh_time = datetime.utcnow()
+        print(f"Updating stock cache at {refresh_time}")
+        history_rows = []
 
         try:
             for stock in POPULAR_STOCKS:
                 symbol = stock["symbol"].upper()
                 try:
-                    quote = await alpha_vantage.get_quote(symbol)
+                    quote = await finnhub.get_quote(symbol)
                     if quote:
                         cached_quote = {
                             **quote,
@@ -38,16 +52,25 @@ class StockCache:
                             "name": stock["name"],
                         }
                         self._cache[symbol] = cached_quote
-                        popular_quotes.append(self._to_popular_quote(cached_quote))
                         cache_client.set_json(
                             self._quote_key(symbol),
                             cached_quote,
                             ttl_seconds=self._cache_ttl,
                         )
+                        history_rows.append(
+                            StockPriceHistory(
+                                id=str(uuid.uuid4()),
+                                symbol=symbol,
+                                price=float(cached_quote["price"]),
+                                recorded_at=refresh_time,
+                            )
+                        )
                 except Exception as e:
                     print(f"Error caching {symbol}: {e}")
 
-            self._last_update = datetime.now()
+            self._record_price_history(history_rows, refresh_time)
+            popular_quotes = self._current_popular_quotes()
+            self._last_update = refresh_time
             cache_client.set_json(
                 self._popular_quotes_key,
                 popular_quotes,
@@ -58,7 +81,7 @@ class StockCache:
                 self._last_update.isoformat(),
                 ttl_seconds=self._cache_ttl,
             )
-            print(f"Stock cache updated: {len(self._cache)} stocks")
+            print(f"Stock cache updated: {len(popular_quotes)} stocks")
         finally:
             self._is_refreshing = False
 
@@ -71,7 +94,7 @@ class StockCache:
         if not self._cache:
             return []
 
-        return [self._to_popular_quote(data) for data in self._cache.values()]
+        return self._current_popular_quotes()
 
     def is_expired(self) -> bool:
         """Check whether the quote cache needs a refresh."""
@@ -101,6 +124,31 @@ class StockCache:
 
     def _quote_key(self, symbol: str) -> str:
         return f"{self._quote_key_prefix}{symbol.upper()}"
+
+    def _record_price_history(self, rows: list[StockPriceHistory], refresh_time: datetime) -> None:
+        if not rows:
+            return
+
+        db = SessionLocal()
+        try:
+            cutoff = refresh_time.replace(microsecond=0) - settings.STOCK_TREND_RETENTION_DAYS_DELTA
+            db.query(StockPriceHistory).filter(StockPriceHistory.recorded_at < cutoff).delete()
+            db.add_all(rows)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"Error recording stock price history: {e}")
+        finally:
+            db.close()
+
+    def _current_popular_quotes(self) -> list:
+        quotes = []
+        for stock in POPULAR_STOCKS:
+            symbol = stock["symbol"].upper()
+            cached = self._cache.get(symbol)
+            if cached:
+                quotes.append(self._to_popular_quote(cached))
+        return quotes
 
     @staticmethod
     def _to_popular_quote(data: dict) -> dict:

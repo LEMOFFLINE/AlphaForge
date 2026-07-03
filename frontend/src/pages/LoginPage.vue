@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import heroImage from '../assets/hero.jpg';
 import { authApi } from '../lib/api';
 import { useAuthStore } from '../stores/auth';
 import type { RegisterRequest } from '../lib/types';
 
 const router = useRouter();
+const route = useRoute();
 const auth = useAuthStore();
 
 const isLogin = ref(true);
@@ -35,8 +36,9 @@ async function submit() {
           initial_balance: initialBalance.value,
         });
 
-    auth.setAuth(response.user, response.access_token);
-    router.push('/dashboard');
+    auth.setAuth(response.user);
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard';
+    router.push(redirect);
   } catch (err: unknown) {
     const detail = typeof err === 'object' && err !== null && 'response' in err
       ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
@@ -49,13 +51,13 @@ async function submit() {
 </script>
 
 <template>
-  <div class="grid min-h-screen bg-white lg:grid-cols-2">
-    <section class="flex items-center justify-center px-6 py-12">
+  <div class="grid min-h-dvh bg-white lg:h-dvh lg:grid-cols-2 lg:overflow-hidden">
+    <section class="flex items-center justify-center px-6 py-8 lg:min-h-0 lg:py-0">
       <div class="w-full max-w-md">
         <h1 class="mb-2 text-4xl font-medium text-primary">AlphaForge</h1>
-        <p class="mb-12 text-text-muted">虚拟投资交易平台</p>
+        <p class="mb-8 text-text-muted">虚拟投资交易平台</p>
 
-        <div class="mb-8 flex gap-4">
+        <div class="mb-6 flex gap-4">
           <button
             class="border-b-2 pb-2 transition-colors"
             :class="isLogin ? 'border-primary text-primary' : 'border-transparent text-text-muted'"
@@ -72,13 +74,13 @@ async function submit() {
           </button>
         </div>
 
-        <form class="space-y-6" @submit.prevent="submit">
+        <form class="space-y-5" @submit.prevent="submit">
           <input
             v-model="email"
             type="email"
             placeholder="邮箱"
             required
-            class="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-text placeholder:text-text-muted focus:border-primary focus:outline-none"
+            class="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-text placeholder:text-text-muted focus:border-primary focus:outline-none"
           />
           <input
             v-model="password"
@@ -86,7 +88,7 @@ async function submit() {
             placeholder="密码"
             required
             minlength="6"
-            class="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-text placeholder:text-text-muted focus:border-primary focus:outline-none"
+            class="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-text placeholder:text-text-muted focus:border-primary focus:outline-none"
           />
 
           <div v-if="!isLogin">
@@ -96,7 +98,7 @@ async function submit() {
                 v-for="option in balanceOptions"
                 :key="option.value"
                 type="button"
-                class="rounded-lg border py-3 transition-colors"
+                class="rounded-lg border py-2.5 transition-colors"
                 :class="initialBalance === option.value ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 bg-white text-text-muted hover:border-gray-300'"
                 @click="initialBalance = option.value"
               >
@@ -110,7 +112,7 @@ async function submit() {
           <button
             type="submit"
             :disabled="loading"
-            class="w-full rounded-lg bg-primary py-3 text-white transition-colors hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50"
+            class="w-full rounded-lg bg-primary py-2.5 text-white transition-colors hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50"
           >
             {{ loading ? '处理中...' : isLogin ? '登录' : '注册' }}
           </button>
@@ -118,8 +120,8 @@ async function submit() {
       </div>
     </section>
 
-    <section class="relative hidden overflow-hidden bg-gray-50 lg:block">
-      <img :src="heroImage" alt="AlphaForge market screen" class="h-full w-full object-cover" />
+    <section class="relative hidden h-full overflow-hidden bg-gray-50 lg:block">
+      <img :src="heroImage" alt="AlphaForge market screen" class="absolute inset-0 h-full w-full object-cover" />
       <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
       <div class="absolute bottom-12 left-12 right-12 text-white">
         <h2 class="mb-4 text-3xl font-medium">真实市场数据</h2>
