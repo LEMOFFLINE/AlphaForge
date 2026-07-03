@@ -40,6 +40,7 @@ export interface Quote {
   change: number;
   change_percent: number;
   volume?: number;
+  timestamp?: number;
 }
 
 export interface StockTrendPoint {

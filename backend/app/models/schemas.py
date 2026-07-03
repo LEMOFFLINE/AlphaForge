@@ -111,6 +111,7 @@ class QuoteResponse(BaseModel):
     change: float
     change_percent: float
     volume: int
+    timestamp: int | None = None
 
 
 class StockTrendPoint(BaseModel):

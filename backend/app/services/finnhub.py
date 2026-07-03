@@ -61,6 +61,7 @@ class FinnhubService:
             "change": float(data.get("d") or 0),
             "change_percent": float(data.get("dp") or 0),
             "volume": 0,
+            "timestamp": int(data.get("t") or 0),
         }
 
     async def search_symbol(self, query: str) -> list:

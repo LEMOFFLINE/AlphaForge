@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional
 
 from app.core.cache import cache_client
@@ -62,7 +62,7 @@ class StockCache:
                                 id=str(uuid.uuid4()),
                                 symbol=symbol,
                                 price=float(cached_quote["price"]),
-                                recorded_at=refresh_time,
+                                recorded_at=self._quote_recorded_at(cached_quote, refresh_time),
                             )
                         )
                 except Exception as e:
@@ -158,7 +158,15 @@ class StockCache:
             "price": data["price"],
             "change": data["change"],
             "change_percent": data["change_percent"],
+            "timestamp": data.get("timestamp"),
         }
+
+    @staticmethod
+    def _quote_recorded_at(data: dict, fallback: datetime) -> datetime:
+        timestamp = int(data.get("timestamp") or 0)
+        if timestamp <= 0:
+            return fallback
+        return datetime.fromtimestamp(timestamp, tz=timezone.utc).replace(tzinfo=None)
 
 
 stock_cache = StockCache()
