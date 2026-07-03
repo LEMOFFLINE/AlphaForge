@@ -150,6 +150,12 @@ function chartSummary(points: StockTrendPoint[]) {
 function trendLabels(points: StockTrendPoint[]) {
   if (points.length === 0) return [];
   const timeZone = expandedTrend.value?.timezone || 'America/New_York';
+  const localDates = points.map((point) => new Date(point.timestamp * 1000).toLocaleDateString('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    timeZone,
+  }));
+  const crossesDate = new Set(localDates).size > 1;
   const sample = points.filter((_, index) => {
     const stride = Math.max(1, Math.floor(points.length / 4));
     return index % stride === 0;
@@ -157,9 +163,17 @@ function trendLabels(points: StockTrendPoint[]) {
 
   return sample.map((point) => {
     const date = new Date(point.timestamp * 1000);
-    return trendRange.value === '1d'
-      ? date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', timeZone })
-      : date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', timeZone });
+    if (trendRange.value !== '1d') {
+      return date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', timeZone });
+    }
+
+    const time = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', timeZone });
+    if (!crossesDate) {
+      return time;
+    }
+
+    const day = date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', timeZone });
+    return `${day} ${time}`;
   });
 }
 

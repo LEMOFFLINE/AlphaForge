@@ -80,7 +80,11 @@ class StockTrendService:
 
         quote_timestamp = int(quote.get("timestamp") or 0)
         if quote_timestamp > 0:
-            points_by_timestamp = {point["timestamp"]: point["price"] for point in points}
+            points_by_timestamp = {
+                point["timestamp"]: point["price"]
+                for point in points
+                if point["timestamp"] <= quote_timestamp
+            }
             points_by_timestamp[quote_timestamp] = price
             points = [
                 {"timestamp": timestamp, "price": point_price}
@@ -94,7 +98,9 @@ class StockTrendService:
         if previous_close <= 0:
             return points
 
-        latest_timestamp = points[-1]["timestamp"] if points else int(datetime.now(timezone.utc).timestamp())
+        latest_timestamp = quote_timestamp if quote_timestamp > 0 else (
+            points[-1]["timestamp"] if points else int(datetime.now(timezone.utc).timestamp())
+        )
         has_movement = any(abs(point["price"] - previous_close) >= 0.005 for point in points)
         baseline_timestamp = latest_timestamp - 24 * 60 * 60
         baseline = {"timestamp": baseline_timestamp, "price": previous_close}
