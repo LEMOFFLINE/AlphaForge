@@ -53,7 +53,7 @@ class StockTrendService:
         return {
             "symbol": normalized_symbol,
             "range": trend_range,
-            "timezone": "America/New_York",
+            "timezone": "Asia/Shanghai",
             "points": points,
         }
 

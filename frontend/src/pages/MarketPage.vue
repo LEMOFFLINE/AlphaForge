@@ -6,6 +6,7 @@ import type { OrderCreate, Quote, StockTrend, StockTrendPoint } from '../lib/typ
 import { useAuthStore } from '../stores/auth';
 
 const PAGE_SIZE = 20;
+const DISPLAY_TIME_ZONE = 'Asia/Shanghai';
 
 const auth = useAuthStore();
 const stocks = ref<Quote[]>([]);
@@ -53,7 +54,7 @@ async function loadMarketData() {
   try {
     stocks.value = await stockApi.getPopularQuotes();
     currentPage.value = Math.min(currentPage.value, totalPages.value);
-    lastUpdate.value = new Date().toLocaleTimeString('zh-CN');
+    lastUpdate.value = new Date().toLocaleTimeString('zh-CN', { timeZone: DISPLAY_TIME_ZONE });
   } catch (err) {
     console.error('Failed to load market data:', err);
   } finally {
@@ -149,7 +150,7 @@ function chartSummary(points: StockTrendPoint[]) {
 
 function trendLabels(points: StockTrendPoint[]) {
   if (points.length === 0) return [];
-  const timeZone = expandedTrend.value?.timezone || 'America/New_York';
+  const timeZone = expandedTrend.value?.timezone || DISPLAY_TIME_ZONE;
   const localDates = points.map((point) => new Date(point.timestamp * 1000).toLocaleDateString('zh-CN', {
     month: 'numeric',
     day: 'numeric',

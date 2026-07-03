@@ -55,11 +55,10 @@ class YahooChartService:
         if not points:
             return None
 
-        meta = result.get("meta") or {}
         return {
             "symbol": normalized_symbol,
             "range": trend_range,
-            "timezone": meta.get("exchangeTimezoneName") or "America/New_York",
+            "timezone": "Asia/Shanghai",
             "points": points,
         }
 
