@@ -52,7 +52,7 @@ async def get_stock_trend(
     symbol: str = Path(min_length=1, max_length=16, pattern=r"^[A-Za-z0-9.^-]+$"),
     range: str = Query(default="1d", pattern=r"^(1d|7d)$"),
 ):
-    trend = stock_trends.get_trend(symbol, range)  # type: ignore[arg-type]
+    trend = await stock_trends.get_trend(symbol, range)  # type: ignore[arg-type]
     if not trend:
         raise HTTPException(status_code=404, detail="Trend not found")
     return trend

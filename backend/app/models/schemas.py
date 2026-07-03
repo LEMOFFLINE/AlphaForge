@@ -121,6 +121,7 @@ class StockTrendPoint(BaseModel):
 class StockTrendResponse(BaseModel):
     symbol: str
     range: Literal["1d", "7d"]
+    timezone: str = "America/New_York"
     points: list[StockTrendPoint]
 
 

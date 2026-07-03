@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
@@ -80,7 +80,7 @@ class FinnhubService:
         ]
 
     async def get_daily_data(self, symbol: str) -> Optional[dict]:
-        today = datetime.utcnow()
+        today = datetime.now(timezone.utc)
         start = today - timedelta(days=120)
         return await self._get(
             "/stock/candle",

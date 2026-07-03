@@ -50,6 +50,7 @@ export interface StockTrendPoint {
 export interface StockTrend {
   symbol: string;
   range: '1d' | '7d';
+  timezone: string;
   points: StockTrendPoint[];
 }
 

@@ -102,7 +102,7 @@ class StockCache:
         if redis_last_update:
             try:
                 last_update = datetime.fromisoformat(redis_last_update)
-                elapsed = (datetime.now() - last_update).total_seconds()
+                elapsed = (datetime.utcnow() - last_update).total_seconds()
                 return elapsed > self._cache_ttl
             except ValueError:
                 return True
@@ -110,7 +110,7 @@ class StockCache:
         if self._last_update is None:
             return True
 
-        elapsed = (datetime.now() - self._last_update).total_seconds()
+        elapsed = (datetime.utcnow() - self._last_update).total_seconds()
         return elapsed > self._cache_ttl
 
     def get_quote(self, symbol: str) -> Optional[dict]:
