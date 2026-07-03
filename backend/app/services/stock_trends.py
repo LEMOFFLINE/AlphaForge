@@ -93,24 +93,26 @@ class StockTrendService:
         end_timestamp = StockTrendService._utc_timestamp(end)
         points_by_timestamp[end_timestamp] = price
 
-        if trend_range != "1d" or abs(change) < 0.005:
-            return [
-                {"timestamp": timestamp, "price": point_price}
-                for timestamp, point_price in sorted(points_by_timestamp.items())
-            ]
-
-        previous_close = price - change
-        if previous_close <= 0:
+        if trend_range != "1d":
             return [
                 {"timestamp": timestamp, "price": point_price}
                 for timestamp, point_price in sorted(points_by_timestamp.items())
             ]
 
         start_timestamp = StockTrendService._utc_timestamp(start)
-        points_by_timestamp.setdefault(start_timestamp, previous_close)
+        if abs(change) < 0.005:
+            return [
+                {"timestamp": start_timestamp, "price": price},
+                {"timestamp": end_timestamp, "price": price},
+            ]
+
+        previous_close = price - change
+        if previous_close <= 0:
+            return [{"timestamp": end_timestamp, "price": price}]
+
         return [
-            {"timestamp": timestamp, "price": point_price}
-            for timestamp, point_price in sorted(points_by_timestamp.items())
+            {"timestamp": start_timestamp, "price": previous_close},
+            {"timestamp": end_timestamp, "price": price},
         ]
 
 
