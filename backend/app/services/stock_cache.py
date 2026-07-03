@@ -1,7 +1,9 @@
 import asyncio
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Optional
+
+from sqlalchemy import func
 
 from app.core.cache import cache_client
 from app.core.config import settings
@@ -25,12 +27,15 @@ class StockCache:
         self._last_update_key = "stocks:last_update"
 
     async def run_periodic_refresh(self):
-        """Continuously refresh popular quotes on a fixed start-to-start interval."""
+        """Continuously refresh popular quotes, aligned to UTC hour boundaries."""
         while True:
-            started_at = asyncio.get_running_loop().time()
+            current_hour = self._hour_bucket(datetime.utcnow())
+            if self._refresh_interval == 3600 and self._has_complete_history_for_hour(current_hour):
+                await asyncio.sleep(self._seconds_until_next_refresh())
+                continue
+
             await self.update_cache()
-            elapsed = asyncio.get_running_loop().time() - started_at
-            await asyncio.sleep(max(0, self._refresh_interval - elapsed))
+            await asyncio.sleep(self._seconds_until_next_refresh())
 
     async def update_cache(self):
         """Refresh popular stock quotes in Redis, with memory fallback."""
@@ -183,6 +188,28 @@ class StockCache:
     @staticmethod
     def _hour_bucket(value: datetime) -> datetime:
         return value.replace(minute=0, second=0, microsecond=0)
+
+    def _seconds_until_next_refresh(self) -> float:
+        if self._refresh_interval != 3600:
+            return self._refresh_interval
+
+        now = datetime.utcnow()
+        next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        return max(1.0, (next_hour - now).total_seconds())
+
+    @staticmethod
+    def _has_complete_history_for_hour(history_time: datetime) -> bool:
+        db = SessionLocal()
+        try:
+            count = (
+                db.query(func.count(StockPriceHistory.id))
+                .filter(StockPriceHistory.recorded_at == history_time)
+                .scalar()
+                or 0
+            )
+            return count >= len(POPULAR_STOCKS)
+        finally:
+            db.close()
 
 
 stock_cache = StockCache()

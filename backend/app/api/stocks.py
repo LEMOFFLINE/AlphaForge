@@ -19,6 +19,7 @@ async def get_quote(symbol: str = Path(min_length=1, max_length=16, pattern=r"^[
             change=cached["change"],
             change_percent=cached["change_percent"],
             volume=cached.get("volume", 0),
+            timestamp=cached.get("timestamp"),
         )
 
     quote = await finnhub.get_quote(symbol)
@@ -32,6 +33,7 @@ async def get_quote(symbol: str = Path(min_length=1, max_length=16, pattern=r"^[
         change=quote["change"],
         change_percent=quote["change_percent"],
         volume=quote["volume"],
+        timestamp=quote.get("timestamp"),
     )
 
 
