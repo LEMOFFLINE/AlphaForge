@@ -46,6 +46,11 @@ class StockCache:
         try:
             for batch_start in range(0, len(POPULAR_STOCKS), self._batch_size):
                 batch = POPULAR_STOCKS[batch_start:batch_start + self._batch_size]
+                print(
+                    "Updating stock cache batch "
+                    f"{(batch_start // self._batch_size) + 1}/"
+                    f"{((len(POPULAR_STOCKS) - 1) // self._batch_size) + 1}"
+                )
                 for stock in batch:
                     symbol = stock["symbol"].upper()
                     try:

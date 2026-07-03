@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     STOCK_CACHE_TTL_SECONDS: int = 7200
     STOCK_CACHE_REFRESH_INTERVAL_SECONDS: int = 3600
-    STOCK_REFRESH_BATCH_SIZE: int = 20
+    STOCK_REFRESH_BATCH_SIZE: int = 50
     STOCK_REFRESH_BATCH_PAUSE_SECONDS: float = 0.0
     STOCK_TREND_RETENTION_DAYS: int = 8
 

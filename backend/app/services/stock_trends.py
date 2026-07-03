@@ -5,8 +5,6 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.database import SessionLocal
 from app.models.user import StockPriceHistory
-from app.services.finnhub import finnhub
-from app.services.stock_cache import stock_cache
 
 TrendRange = Literal["1d", "7d"]
 
@@ -50,7 +48,6 @@ class StockTrendService:
             {"timestamp": timestamp, "price": price}
             for timestamp, price in sorted(points_by_timestamp.items())
         ]
-        points = await self._with_quote_baseline(normalized_symbol, trend_range, points, start, end)
 
         if not points:
             return None
@@ -71,49 +68,6 @@ class StockTrendService:
     @staticmethod
     def _hour_bucket(value: datetime) -> datetime:
         return value.replace(minute=0, second=0, microsecond=0)
-
-    @staticmethod
-    async def _with_quote_baseline(
-        symbol: str,
-        trend_range: TrendRange,
-        points: list[dict],
-        start: datetime,
-        end: datetime,
-    ) -> list[dict]:
-        quote = stock_cache.get_quote(symbol) or await finnhub.get_quote(symbol)
-        if not quote:
-            return points
-
-        price = float(quote.get("price") or 0)
-        change = float(quote.get("change") or 0)
-        if price <= 0:
-            return points
-
-        points_by_timestamp = {point["timestamp"]: point["price"] for point in points}
-        end_timestamp = StockTrendService._utc_timestamp(end)
-        points_by_timestamp[end_timestamp] = price
-
-        if trend_range != "1d":
-            return [
-                {"timestamp": timestamp, "price": point_price}
-                for timestamp, point_price in sorted(points_by_timestamp.items())
-            ]
-
-        start_timestamp = StockTrendService._utc_timestamp(start)
-        if abs(change) < 0.005:
-            return [
-                {"timestamp": start_timestamp, "price": price},
-                {"timestamp": end_timestamp, "price": price},
-            ]
-
-        previous_close = price - change
-        if previous_close <= 0:
-            return [{"timestamp": end_timestamp, "price": price}]
-
-        return [
-            {"timestamp": start_timestamp, "price": previous_close},
-            {"timestamp": end_timestamp, "price": price},
-        ]
 
 
 stock_trends = StockTrendService()
